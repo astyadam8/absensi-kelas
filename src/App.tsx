@@ -82,19 +82,23 @@ export default function App() {
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date(2026, 2, 1)); // Start at March 2026
 
   const [nama, setNama] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [status, setStatus] = useState('Hadir');
   const [keterangan, setKeterangan] = useState('');
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
 
   const fetchRecords = async () => {
     try {
       const response = await fetch('/api/attendance');
+      if (!response.ok) throw new Error('Gagal mengambil data');
       const data = await response.json();
       setRecords(data);
     } catch (error) {
       console.error('Failed to fetch records:', error);
+      setMessage({ type: 'error', text: 'Gagal memuat riwayat kehadiran.' });
     }
   };
 
@@ -111,17 +115,39 @@ export default function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nama) return;
+    if (!nama) {
+      setMessage({ type: 'error', text: 'Silakan pilih nama Anda terlebih dahulu.' });
+      return;
+    }
+
+    if (loginRole === 'orangtua') {
+      setMessage({ type: 'error', text: 'Orang tua hanya memiliki akses untuk melihat laporan.' });
+      return;
+    }
 
     setIsSubmitting(true);
     setMessage(null);
 
     try {
+      // Check for duplicate today
+      const today = new Date().toISOString().split('T')[0];
+      const isDuplicate = records.some(r => {
+        const rDate = new Date(r.timestamp).toISOString().split('T')[0];
+        return r.nama === nama && rDate === today;
+      });
+
+      if (isDuplicate) {
+        setMessage({ type: 'info', text: `Absensi untuk ${nama} sudah dikirim hari ini.` });
+        return;
+      }
+
       const response = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nama, status, keterangan }),
       });
+
+      const data = await response.json();
 
       if (response.ok) {
         setMessage({ type: 'success', text: 'Data berhasil disimpan dengan aman!' });
@@ -130,10 +156,10 @@ export default function App() {
         setStatus('Hadir');
         fetchRecords();
       } else {
-        setMessage({ type: 'error', text: 'Gagal mengirim presensi.' });
+        setMessage({ type: 'error', text: data.error || 'Gagal mengirim presensi.' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Terjadi kesalahan jaringan.' });
+      setMessage({ type: 'error', text: 'Terjadi kesalahan jaringan. Periksa koneksi internet Anda.' });
     } finally {
       setIsSubmitting(false);
       setTimeout(() => setMessage(null), 5000);
@@ -165,7 +191,8 @@ export default function App() {
     
     // Days of the month
     for (let d = 1; d <= daysInMonth; d++) {
-      const isToday = d === 4 && month === 2 && year === 2026; // Today is March 4, 2026
+      const today = new Date();
+      const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
       const hasAttendance = records.some(r => {
         const rDate = new Date(r.timestamp);
         return rDate.getDate() === d && rDate.getMonth() === month && rDate.getFullYear() === year;
@@ -285,7 +312,16 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-cokelat-muda">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-cokelat-muda/10 border border-cokelat-muda/20">
+              <div className={`w-2 h-2 rounded-full ${
+                loginRole === 'guru' ? 'bg-cokelat-tua' : 
+                loginRole === 'siswa' ? 'bg-zinc-900' : 'bg-emerald-600'
+              }`} />
+              <span className="text-[10px] font-black text-cokelat-tua uppercase tracking-widest">
+                {loginRole === 'guru' ? 'Guru' : loginRole === 'siswa' ? 'Siswa' : 'Orang Tua'}
+              </span>
+            </div>
+            <div className="hidden md:flex items-center gap-2 text-cokelat-muda">
               <Calendar className="w-4 h-4" />
               <span className="text-sm font-medium">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             </div>
@@ -346,29 +382,75 @@ export default function App() {
                       <p className="text-sm text-cokelat-muda font-medium">Digitalisasi kehadiran yang akurat dan efisien.</p>
                     </div>
                     
-                    <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                      {/* Nama Dropdown */}
+                    <form onSubmit={handleSubmit} className="p-8 space-y-6" aria-label="Formulir Presensi Siswa">
+                      {/* Nama Dropdown with Search */}
                       <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Nama Lengkap</label>
+                        <label id="label-nama" className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Nama Lengkap</label>
                         <div className="relative">
-                          <select
-                            required
-                            value={nama}
-                            onChange={(e) => setNama(e.target.value)}
-                            className="w-full appearance-none px-4 py-3 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-cokelat-muda focus:border-transparent outline-none transition-all bg-zinc-50 font-medium"
+                          <div 
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border cursor-pointer transition-all font-medium ${!nama && message?.type === 'error' ? 'border-rose-500 bg-rose-50' : 'border-zinc-200 bg-zinc-50'} focus-within:ring-2 focus-within:ring-cokelat-muda focus-within:border-transparent`}
+                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            role="combobox"
+                            aria-expanded={isDropdownOpen}
+                            aria-haspopup="listbox"
+                            aria-labelledby="label-nama"
                           >
-                            <option value="">Pilih Nama...</option>
-                            {STUDENTS.map(s => (
-                              <option key={s.name} value={s.name}>{s.name}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cokelat-muda pointer-events-none" />
+                            <span className={nama ? 'text-cokelat-tua' : 'text-cokelat-muda/50'}>
+                              {nama || 'Cari atau pilih nama...'}
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-cokelat-muda transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                          </div>
+
+                          <AnimatePresence>
+                            {isDropdownOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute z-20 top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-zinc-100 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-zinc-50">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="Ketik nama untuk mencari..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-100 focus:outline-none focus:ring-1 focus:ring-cokelat-muda bg-zinc-50"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                                <div className="max-h-60 overflow-y-auto no-scrollbar" role="listbox">
+                                  {STUDENTS.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                                    <div className="p-4 text-center text-xs text-cokelat-muda italic">Nama tidak ditemukan</div>
+                                  ) : (
+                                    STUDENTS.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map(s => (
+                                      <div
+                                        key={s.name}
+                                        onClick={() => {
+                                          setNama(s.name);
+                                          setIsDropdownOpen(false);
+                                          setSearchTerm('');
+                                        }}
+                                        role="option"
+                                        aria-selected={nama === s.name}
+                                        className={`px-4 py-3 text-sm cursor-pointer transition-colors hover:bg-krem ${nama === s.name ? 'bg-cokelat-muda/10 text-cokelat-tua font-bold' : 'text-cokelat-muda'}`}
+                                      >
+                                        {s.name}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
+                        {isDropdownOpen && <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />}
                       </div>
 
                       {/* Status Radio Buttons */}
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Status Kehadiran</label>
+                      <div className="space-y-2" role="radiogroup" aria-labelledby="label-status">
+                        <label id="label-status" className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Status Kehadiran</label>
                         <div className="flex flex-wrap gap-4 pt-1">
                           {STATUS_OPTIONS.map((opt) => (
                             <label key={opt.id} className="flex items-center gap-2 cursor-pointer group">
@@ -379,7 +461,8 @@ export default function App() {
                                   value={opt.id}
                                   checked={status === opt.id}
                                   onChange={() => setStatus(opt.id)}
-                                  className="peer appearance-none w-5 h-5 rounded-full border-2 border-zinc-200 checked:border-cokelat-muda transition-all cursor-pointer"
+                                  className="peer appearance-none w-5 h-5 rounded-full border-2 border-zinc-200 checked:border-cokelat-muda transition-all cursor-pointer focus:ring-2 focus:ring-cokelat-muda focus:ring-offset-2"
+                                  aria-label={opt.label}
                                 />
                                 <div className="absolute w-2.5 h-2.5 rounded-full bg-cokelat-muda scale-0 peer-checked:scale-100 transition-transform" />
                               </div>
@@ -424,10 +507,12 @@ export default function App() {
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
                             className={`p-4 rounded-xl text-sm font-bold flex items-center justify-center gap-3 ${
-                              message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                              message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 
+                              message.type === 'info' ? 'bg-blue-50 text-blue-700' : 
+                              'bg-rose-50 text-rose-700'
                             }`}
                           >
-                            {message.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                            {message.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : message.type === 'info' ? <Info className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                             {message.text}
                           </motion.div>
                         )}
@@ -439,30 +524,46 @@ export default function App() {
 
               {/* Parent Welcome Message */}
               {loginRole === 'orangtua' && (
-                <div className="lg:col-span-12">
-                  <div className="bg-emerald-600 rounded-3xl p-8 text-white shadow-xl shadow-emerald-900/10 mb-8 relative overflow-hidden">
-                    <div className="relative z-10">
-                      <h2 className="text-3xl font-black mb-2">Selamat Datang, Bapak/Ibu!</h2>
-                      <p className="text-emerald-50/80 font-medium max-w-xl">
-                        Terima kasih telah memantau kehadiran anak Anda di SMAK SETIA BAKTI RUTENG. 
-                        Di sini Anda dapat melihat riwayat kehadiran harian secara transparan.
+                <div className="lg:col-span-5">
+                  <div className="bg-white rounded-2xl shadow-xl shadow-cokelat-tua/5 overflow-hidden border border-white p-8 space-y-4">
+                    <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
+                      <ShieldCheck className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-2xl font-black text-cokelat-tua">Mode Pantau</h2>
+                    <p className="text-sm text-cokelat-muda font-medium leading-relaxed">
+                      Anda masuk sebagai <strong>Orang Tua</strong>. Dalam mode ini, Anda dapat memantau riwayat kehadiran anak Anda secara langsung.
+                    </p>
+                    <div className="bg-emerald-50 p-4 rounded-xl flex gap-3 items-start">
+                      <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-emerald-700 font-bold leading-relaxed">
+                        Formulir pengiriman absensi dinonaktifkan untuk peran Orang Tua demi keamanan data.
                       </p>
                     </div>
-                    <Heart className="absolute -right-8 -bottom-8 w-48 h-48 text-emerald-500/20 rotate-12" />
                   </div>
                 </div>
               )}
 
               {/* List Section */}
-              <div className={loginRole === 'orangtua' ? "lg:col-span-12 space-y-6" : "lg:col-span-7 space-y-6"}>
+              <div className={loginRole === 'orangtua' ? "lg:col-span-7 space-y-6" : "lg:col-span-7 space-y-6"}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <History className="w-5 h-5 text-cokelat-muda" />
                     <h2 className="font-bold text-lg text-cokelat-tua">Riwayat Kehadiran</h2>
                   </div>
-                  <span className="text-[10px] font-extrabold text-cokelat-muda bg-white px-3 py-1.5 rounded-full border border-cokelat-muda/10 shadow-sm uppercase tracking-widest">
-                    {records.length} Total Data
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={fetchRecords}
+                      disabled={isSubmitting}
+                      className="p-1.5 rounded-lg hover:bg-white text-cokelat-muda transition-all disabled:opacity-50"
+                      title="Segarkan Data"
+                      aria-label="Segarkan Riwayat Kehadiran"
+                    >
+                      <Loader2 className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
+                    </button>
+                    <span className="text-[10px] font-extrabold text-cokelat-muda bg-white px-3 py-1.5 rounded-full border border-cokelat-muda/10 shadow-sm uppercase tracking-widest">
+                      {records.length} Total Data
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -534,19 +635,19 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column: Stats */}
                 <div className="lg:col-span-7 space-y-8">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6" role="region" aria-label="Ringkasan Statistik">
                     {[
                       { label: 'Hadir', count: records.filter(r => r.status === 'Hadir').length, color: 'bg-emerald-500', icon: CheckCircle2 },
                       { label: 'Izin', count: records.filter(r => r.status === 'Izin').length, color: 'bg-amber-500', icon: Clock },
                       { label: 'Sakit', count: records.filter(r => r.status === 'Sakit').length, color: 'bg-blue-500', icon: AlertCircle },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-white p-6 rounded-3xl border border-white shadow-xl shadow-cokelat-tua/5 flex flex-col items-center text-center gap-3">
-                        <div className={`w-12 h-12 rounded-2xl ${stat.color} flex items-center justify-center text-white shadow-lg`}>
+                        <div className={`w-12 h-12 rounded-2xl ${stat.color} flex items-center justify-center text-white shadow-lg`} aria-hidden="true">
                           <stat.icon className="w-6 h-6" />
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-cokelat-muda uppercase tracking-widest mb-1">{stat.label}</p>
-                          <h3 className="text-2xl font-black text-cokelat-tua">{stat.count}</h3>
+                          <h3 className="text-2xl font-black text-cokelat-tua" aria-label={`${stat.count} siswa ${stat.label}`}>{stat.count}</h3>
                         </div>
                       </div>
                     ))}
@@ -692,15 +793,15 @@ export default function App() {
 
               <div className="bg-white rounded-3xl border border-white shadow-xl shadow-cokelat-tua/5 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse" aria-label="Tabel Rekapitulasi Absensi Siswa">
                     <thead>
                       <tr className="bg-zinc-50 border-b border-zinc-100">
-                        <th className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Nama Siswa</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] text-center">Hadir</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] text-center">Izin</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] text-center">Sakit</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-cokelat-tua uppercase tracking-[0.2em] text-center">Total</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em] text-center">Persentase</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Nama Siswa</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] text-center">Hadir</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] text-center">Izin</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] text-center">Sakit</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-cokelat-tua uppercase tracking-[0.2em] text-center">Total</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em] text-center">Persentase</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-50">

@@ -37,6 +37,16 @@ async function startServer() {
     }
 
     try {
+      // Check for duplicate today
+      const today = new Date().toISOString().split('T')[0];
+      const existing = db.prepare(
+        "SELECT id FROM attendance WHERE nama = ? AND date(timestamp) = date(?)"
+      ).get(nama, 'now');
+
+      if (existing) {
+        return res.status(400).json({ error: `Absensi untuk ${nama} sudah dikirim hari ini.` });
+      }
+
       const stmt = db.prepare(
         "INSERT INTO attendance (nama, kelas, status, keterangan) VALUES (?, ?, ?, ?)"
       );
