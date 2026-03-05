@@ -27,19 +27,6 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Auth Route
-  app.post("/api/login", (req, res) => {
-    const { username, password } = req.body;
-    // Simple hardcoded credentials for the class system
-    if (username === "absensi" && password === "123") {
-      res.json({ success: true, user: { name: "Administrator", role: "admin" } });
-    } else if (username === "ortu" && password === "123") {
-      res.json({ success: true, user: { name: "Orang Tua", role: "parent" } });
-    } else {
-      res.status(401).json({ success: false, error: "Username atau password salah" });
-    }
-  });
-
   // API Routes
   app.post("/api/attendance", (req, res) => {
     const { nama, status, keterangan } = req.body;

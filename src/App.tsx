@@ -1,20 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   UserCheck, 
   Users, 
   Clock, 
   CheckCircle2, 
-  AlertCircle, 
+  AlertCircle,
   History,
   Send,
   Loader2,
   Calendar,
   ChevronDown,
-  Lock,
-  User,
   LogOut,
-  Camera,
   GraduationCap,
   UserCircle,
   Home,
@@ -80,10 +77,6 @@ const STATUS_OPTIONS = [
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginRole, setLoginRole] = useState<'guru' | 'siswa' | 'orangtua' | null>(null);
   const [activeTab, setActiveTab] = useState<'beranda' | 'laporan' | 'peraturan' | 'rekap'>('beranda');
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date(2026, 2, 1)); // Start at March 2026
@@ -94,8 +87,6 @@ export default function App() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchRecords = async () => {
     try {
@@ -113,57 +104,9 @@ export default function App() {
     }
   }, [isLoggedIn]);
 
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    if (!isLoggedIn && !loginRole) {
-      const startCamera = async () => {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        } catch (err) {
-          console.error("Error accessing camera:", err);
-        }
-      };
-      startCamera();
-    }
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [isLoggedIn, loginRole]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoggingIn(true);
-    setLoginError('');
-
-    try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (response.ok) {
-        setIsLoggedIn(true);
-      } else {
-        setLoginError('Username atau password salah');
-      }
-    } catch (error) {
-      setLoginError('Terjadi kesalahan jaringan');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
   const handleLogout = () => {
     setIsLoggedIn(false);
     setLoginRole(null);
-    setUsername('');
-    setPassword('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -254,186 +197,71 @@ export default function App() {
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full bg-white rounded-3xl shadow-2xl shadow-cokelat-tua/10 overflow-hidden border border-white"
         >
-          <AnimatePresence mode="wait">
-            {!loginRole ? (
-              <motion.div
-                key="role-selection"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="p-10 space-y-8"
+          <div className="p-10 space-y-8">
+            <div className="text-center">
+              <div className="flex flex-col items-center mb-4">
+                <img 
+                  src={SCHOOL_LOGO_URL} 
+                  alt="Logo SMAK SETIA BAKTI RUTENG" 
+                  className="w-20 h-20 rounded-full border-2 border-cokelat-muda/20 mb-2 object-cover shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+                <h2 className="text-[12px] font-extrabold text-cokelat-muda uppercase tracking-[0.2em]">SMAK SETIA BAKTI RUTENG</h2>
+              </div>
+              <h1 className="text-3xl font-extrabold text-cokelat-tua mb-2">Pilih Peran</h1>
+              <p className="text-sm text-cokelat-muda font-medium">Silakan pilih peran Anda untuk masuk</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <button
+                onClick={() => {
+                  setLoginRole('guru');
+                  setIsLoggedIn(true);
+                }}
+                className="group flex items-center gap-4 p-5 rounded-2xl border-2 border-zinc-100 hover:border-cokelat-muda hover:bg-cokelat-muda/5 transition-all text-left"
               >
-                <div className="text-center">
-                  <div className="flex flex-col items-center mb-4">
-                    <img 
-                      src={SCHOOL_LOGO_URL} 
-                      alt="Logo SMAK SETIA BAKTI RUTENG" 
-                      className="w-14 h-14 rounded-full border-2 border-cokelat-muda/20 mb-2 object-cover shadow-sm"
-                      referrerPolicy="no-referrer"
-                    />
-                    <h2 className="text-[10px] font-extrabold text-cokelat-muda uppercase tracking-[0.2em]">SMAK SETIA BAKTI RUTENG</h2>
-                  </div>
-                  <h1 className="text-3xl font-extrabold text-cokelat-tua mb-2">Pilih Peran</h1>
-                  <p className="text-sm text-cokelat-muda font-medium">Silakan pilih peran Anda untuk masuk</p>
+                <div className="w-12 h-12 bg-cokelat-tua rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-cokelat-tua/20">
+                  <GraduationCap className="w-6 h-6 text-white" />
                 </div>
-
-                {/* Face Screen (Camera Preview) */}
-                <div className="relative aspect-square w-full max-w-[240px] mx-auto rounded-full overflow-hidden border-4 border-cokelat-muda/20 shadow-inner bg-zinc-100 group">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover scale-x-[-1]"
-                  />
-                  <div className="absolute inset-0 border-2 border-dashed border-white/40 rounded-full animate-[spin_10s_linear_infinite]" />
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3/4 h-3/4 border-2 border-cokelat-muda/30 rounded-full flex items-center justify-center">
-                      <Camera className="w-8 h-8 text-white/50" />
-                    </div>
-                  </div>
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-cokelat-tua/80 backdrop-blur-sm px-3 py-1 rounded-full">
-                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">Face Scan Ready</span>
-                  </div>
+                <div>
+                  <h3 className="font-bold text-cokelat-tua">Masuk sebagai Guru</h3>
+                  <p className="text-xs text-cokelat-muda font-medium">Akses dashboard & kelola data</p>
                 </div>
+              </button>
 
-                <div className="grid grid-cols-1 gap-4">
-                  <button
-                    onClick={() => setLoginRole('guru')}
-                    className="group flex items-center gap-4 p-5 rounded-2xl border-2 border-zinc-100 hover:border-cokelat-muda hover:bg-cokelat-muda/5 transition-all text-left"
-                  >
-                    <div className="w-12 h-12 bg-cokelat-tua rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-cokelat-tua/20">
-                      <GraduationCap className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-cokelat-tua">Masuk sebagai Guru</h3>
-                      <p className="text-xs text-cokelat-muda font-medium">Akses dashboard & kelola data</p>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => setLoginRole('siswa')}
-                    className="group flex items-center gap-4 p-5 rounded-2xl border-2 border-zinc-100 hover:border-cokelat-muda hover:bg-cokelat-muda/5 transition-all text-left"
-                  >
-                    <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-zinc-900/20">
-                      <UserCircle className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-cokelat-tua">Masuk sebagai Siswa</h3>
-                      <p className="text-xs text-cokelat-muda font-medium">Isi presensi harian Anda</p>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => setLoginRole('orangtua')}
-                    className="group flex items-center gap-4 p-5 rounded-2xl border-2 border-zinc-100 hover:border-cokelat-muda hover:bg-cokelat-muda/5 transition-all text-left"
-                  >
-                    <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-emerald-600/20">
-                      <Heart className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-cokelat-tua">Masuk sebagai Orang Tua</h3>
-                      <p className="text-xs text-cokelat-muda font-medium">Pantau kehadiran anak Anda</p>
-                    </div>
-                  </button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="login-form"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+              <button
+                onClick={() => {
+                  setLoginRole('siswa');
+                  setIsLoggedIn(true);
+                }}
+                className="group flex items-center gap-4 p-5 rounded-2xl border-2 border-zinc-100 hover:border-cokelat-muda hover:bg-cokelat-muda/5 transition-all text-left"
               >
-                <div className="p-10 text-center border-b border-zinc-50 relative">
-                  <button 
-                    onClick={() => setLoginRole(null)}
-                    className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-bold text-cokelat-muda hover:text-cokelat-tua transition-colors uppercase tracking-widest"
-                  >
-                    Kembali
-                  </button>
-                  <div className="flex flex-col items-center mb-4">
-                    <img 
-                      src={SCHOOL_LOGO_URL} 
-                      alt="Logo SMAK SETIA BAKTI RUTENG" 
-                      className="w-10 h-10 rounded-full border border-cokelat-muda/20 mb-1 object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                    <h2 className="text-[8px] font-extrabold text-cokelat-muda uppercase tracking-[0.2em]">SMAK SETIA BAKTI RUTENG</h2>
-                  </div>
-                  <div className="w-16 h-16 bg-cokelat-tua rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-cokelat-tua/20">
-                    {loginRole === 'guru' ? <GraduationCap className="w-8 h-8 text-white" /> : loginRole === 'siswa' ? <UserCircle className="w-8 h-8 text-white" /> : <Heart className="w-8 h-8 text-white" />}
-                  </div>
-                  <h1 className="text-3xl font-extrabold text-cokelat-tua mb-2">Login {loginRole === 'guru' ? 'Guru' : loginRole === 'siswa' ? 'Siswa' : 'Orang Tua'}</h1>
-                  <p className="text-sm text-cokelat-muda font-medium">Silakan masukkan kredensial Anda</p>
+                <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-zinc-900/20">
+                  <UserCircle className="w-6 h-6 text-white" />
                 </div>
+                <div>
+                  <h3 className="font-bold text-cokelat-tua">Masuk sebagai Siswa</h3>
+                  <p className="text-xs text-cokelat-muda font-medium">Isi presensi harian Anda</p>
+                </div>
+              </button>
 
-                <form onSubmit={handleLogin} className="p-10 space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Username</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Masukkan username..."
-                        className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-100 focus:ring-2 focus:ring-cokelat-muda focus:border-transparent outline-none transition-all bg-zinc-50 font-medium"
-                      />
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cokelat-muda/50" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Password</label>
-                    <div className="relative">
-                      <input
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Masukkan password..."
-                        className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-100 focus:ring-2 focus:ring-cokelat-muda focus:border-transparent outline-none transition-all bg-zinc-50 font-medium"
-                      />
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cokelat-muda/50" />
-                    </div>
-                  </div>
-
-                  <AnimatePresence>
-                    {loginError && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="p-4 bg-rose-50 text-rose-600 rounded-xl text-sm font-bold flex items-center gap-3 border border-rose-100"
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        {loginError}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <button
-                    type="submit"
-                    disabled={isLoggingIn}
-                    className="w-full bg-cokelat-tua text-white py-5 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-cokelat-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-cokelat-tua/20 text-lg"
-                  >
-                    {isLoggingIn ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    ) : (
-                      "Masuk Sekarang"
-                    )}
-                  </button>
-
-                  <div className="pt-4 text-center">
-                    <p className="text-[10px] text-cokelat-muda/40 font-bold uppercase tracking-widest">
-                      {loginRole === 'guru' || loginRole === 'siswa' ? 'Gunakan kredensial kelas XII C2 (absensi/123)' : 'Gunakan kredensial orang tua (ortu/123)'}
-                    </p>
-                  </div>
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              <button
+                onClick={() => {
+                  setLoginRole('orangtua');
+                  setIsLoggedIn(true);
+                }}
+                className="group flex items-center gap-4 p-5 rounded-2xl border-2 border-zinc-100 hover:border-cokelat-muda hover:bg-cokelat-muda/5 transition-all text-left"
+              >
+                <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-emerald-600/20">
+                  <Heart className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-cokelat-tua">Masuk sebagai Orang Tua</h3>
+                  <p className="text-xs text-cokelat-muda font-medium">Pantau kehadiran anak Anda</p>
+                </div>
+              </button>
+            </div>
+          </div>
         </motion.div>
       </div>
     );

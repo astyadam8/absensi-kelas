@@ -1,5 +1,5 @@
 {
   "name": "Sistem Absensi XII C2",
   "description": "Sistem absensi digital untuk kelas XII C2 dengan fitur pencatatan kehadiran dan dashboard ringkasan.",
-  "requestFramePermissions": ["camera"]
+  
 }
