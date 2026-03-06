@@ -110,6 +110,28 @@ async function startServer() {
     }
   });
 
+  app.post("/api/students", (req, res) => {
+    const { name, className, parentPhone } = req.body;
+
+    if (!name || !className) {
+      return res.status(400).json({ error: "Nama dan Kelas wajib diisi" });
+    }
+
+    try {
+      const stmt = db.prepare(
+        "INSERT INTO students (name, class, parent_phone) VALUES (?, ?, ?)"
+      );
+      stmt.run(name, className, parentPhone || "");
+      res.json({ message: "Data siswa berhasil ditambahkan!" });
+    } catch (error) {
+      console.error("Database error:", error);
+      if (error.message.includes("UNIQUE constraint failed")) {
+        return res.status(400).json({ error: "Nama siswa sudah ada dalam sistem" });
+      }
+      res.status(500).json({ error: "Gagal menyimpan data siswa" });
+    }
+  });
+
   app.post("/api/attendance", (req, res) => {
     const { nama, status, keterangan, role } = req.body;
     const kelas = "XII C2";

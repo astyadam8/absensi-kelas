@@ -26,7 +26,9 @@ import {
   ChevronRight,
   FileSpreadsheet,
   Download,
-  Printer
+  Printer,
+  UserPlus,
+  Trash2
 } from 'lucide-react';
 
 interface AttendanceRecord {
@@ -92,7 +94,7 @@ const STATUS_OPTIONS = [
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginRole, setLoginRole] = useState<'guru' | 'siswa' | 'orangtua' | null>(null);
-  const [activeTab, setActiveTab] = useState<'beranda' | 'laporan' | 'peraturan' | 'rekap'>('beranda');
+  const [activeTab, setActiveTab] = useState<'beranda' | 'laporan' | 'peraturan' | 'rekap' | 'siswa'>('beranda');
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date(2026, 2, 1)); // Start at March 2026
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -105,6 +107,12 @@ export default function App() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+
+  // New Student Form State
+  const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentClass, setNewStudentClass] = useState('XII C2');
+  const [newStudentPhone, setNewStudentPhone] = useState('');
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -196,6 +204,43 @@ export default function App() {
       setMessage({ type: 'error', text: 'Terjadi kesalahan jaringan. Periksa koneksi internet Anda.' });
     } finally {
       setIsSubmitting(false);
+      setTimeout(() => setMessage(null), 5000);
+    }
+  };
+
+  const handleStudentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStudentName || !newStudentClass) {
+      setMessage({ type: 'error', text: 'Nama dan Kelas wajib diisi.' });
+      return;
+    }
+
+    setIsAddingStudent(true);
+    try {
+      const response = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: newStudentName, 
+          className: newStudentClass, 
+          parentPhone: newStudentPhone 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Data siswa berhasil ditambahkan!' });
+        setNewStudentName('');
+        setNewStudentPhone('');
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Gagal menambah data siswa.' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Terjadi kesalahan jaringan.' });
+    } finally {
+      setIsAddingStudent(false);
       setTimeout(() => setMessage(null), 5000);
     }
   };
@@ -380,6 +425,7 @@ export default function App() {
               { id: 'beranda', label: 'Beranda', icon: Home },
               { id: 'laporan', label: 'Laporan', icon: BarChart3 },
               { id: 'rekap', label: 'Rekap', icon: FileSpreadsheet },
+              ...(loginRole === 'guru' ? [{ id: 'siswa', label: 'Siswa', icon: UserPlus }] : []),
               { id: 'peraturan', label: 'Peraturan', icon: FileText },
             ].map((tab) => (
               <button
@@ -912,6 +958,136 @@ export default function App() {
                     Data rekapitulasi ini dihitung berdasarkan seluruh riwayat presensi yang tersimpan dalam sistem. 
                     Gunakan tombol <strong>Unduh CSV</strong> untuk mengolah data lebih lanjut menggunakan Microsoft Excel atau Google Sheets.
                   </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'siswa' && loginRole === 'guru' && (
+            <motion.div
+              key="siswa"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+            >
+              <div className="lg:col-span-5">
+                <div className="bg-white rounded-2xl shadow-xl shadow-cokelat-tua/5 overflow-hidden border border-white">
+                  <div className="p-8 text-center border-b border-zinc-50">
+                    <h2 className="font-extrabold text-2xl text-cokelat-tua mb-1">Input Data Siswa</h2>
+                    <p className="text-sm text-cokelat-muda font-medium">Tambah peserta didik baru ke dalam sistem.</p>
+                  </div>
+                  
+                  <form onSubmit={handleStudentSubmit} className="p-8 space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Nama Lengkap</label>
+                      <input
+                        type="text"
+                        value={newStudentName}
+                        onChange={(e) => setNewStudentName(e.target.value)}
+                        placeholder="Masukkan nama lengkap siswa..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-cokelat-muda focus:border-transparent outline-none transition-all font-medium bg-zinc-50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">Kelas</label>
+                      <input
+                        type="text"
+                        value={newStudentClass}
+                        onChange={(e) => setNewStudentClass(e.target.value)}
+                        placeholder="Contoh: XII C2"
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-cokelat-muda focus:border-transparent outline-none transition-all font-medium bg-zinc-50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-cokelat-muda">No. HP Orang Tua (WhatsApp)</label>
+                      <input
+                        type="text"
+                        value={newStudentPhone}
+                        onChange={(e) => setNewStudentPhone(e.target.value)}
+                        placeholder="Contoh: 628123456789"
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-cokelat-muda focus:border-transparent outline-none transition-all font-medium bg-zinc-50"
+                      />
+                      <p className="text-[10px] text-cokelat-muda/60 italic">Gunakan format 62 di depan nomor HP.</p>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isAddingStudent}
+                      className="w-full bg-cokelat-tua text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-cokelat-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-cokelat-tua/20"
+                    >
+                      {isAddingStudent ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4" />
+                          Simpan Data Siswa
+                        </>
+                      )}
+                    </button>
+
+                    <AnimatePresence>
+                      {message && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className={`p-4 rounded-xl text-sm font-bold flex items-center justify-center gap-3 ${
+                            message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 
+                            message.type === 'info' ? 'bg-blue-50 text-blue-700' : 
+                            'bg-rose-50 text-rose-700'
+                          }`}
+                        >
+                          {message.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : message.type === 'info' ? <Info className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                          {message.text}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </form>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-cokelat-muda" />
+                    <h2 className="font-bold text-lg text-cokelat-tua">Daftar Peserta Didik</h2>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-cokelat-muda bg-white px-3 py-1.5 rounded-full border border-cokelat-muda/10 shadow-sm uppercase tracking-widest">
+                    {students.length} Siswa Terdaftar
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-3xl border border-white shadow-xl shadow-cokelat-tua/5 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-zinc-50 border-b border-zinc-100">
+                          <th className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Nama</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Kelas</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Kontak</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-50">
+                        {students.map((student) => (
+                          <tr key={student.id} className="hover:bg-zinc-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-krem flex items-center justify-center text-cokelat-tua font-bold text-xs">
+                                  {student.name.charAt(0)}
+                                </div>
+                                <span className="font-bold text-cokelat-tua text-sm">{student.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-medium text-cokelat-muda">{student.class}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-cokelat-muda">{student.parent_phone || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </motion.div>
