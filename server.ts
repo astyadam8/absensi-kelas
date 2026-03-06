@@ -30,10 +30,17 @@ db.exec(`
     nama TEXT NOT NULL,
     kelas TEXT NOT NULL,
     status TEXT NOT NULL,
-    keterangan TEXT,
-    role TEXT DEFAULT 'siswa'
+    keterangan TEXT
   );
 `);
+
+// Migration: Add role column to attendance if it doesn't exist
+try {
+  db.prepare("SELECT role FROM attendance LIMIT 1").get();
+} catch (e) {
+  console.log("Migrating database: Adding role column to attendance table");
+  db.exec("ALTER TABLE attendance ADD COLUMN role TEXT DEFAULT 'siswa'");
+}
 
 // Seed initial data if empty
 const seedData = () => {
@@ -90,6 +97,12 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 
   // API Routes
   app.get("/api/students", (req, res) => {
@@ -185,7 +198,13 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("Unhandled Error:", err);
+    res.status(500).json({ error: "Terjadi kesalahan internal pada server." });
   });
 }
 
