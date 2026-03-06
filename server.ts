@@ -7,39 +7,51 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("attendance.db");
+const dbPath = path.join(__dirname, "attendance.db");
+console.log(`Database path: ${dbPath}`);
+const db = new Database(dbPath);
 
 // Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS students (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    class TEXT NOT NULL,
-    parent_phone TEXT
-  );
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS students (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      class TEXT NOT NULL,
+      parent_phone TEXT
+    );
 
-  CREATE TABLE IF NOT EXISTS teachers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    subject TEXT
-  );
+    CREATE TABLE IF NOT EXISTS teachers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      subject TEXT
+    );
 
-  CREATE TABLE IF NOT EXISTS attendance (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    nama TEXT NOT NULL,
-    kelas TEXT NOT NULL,
-    status TEXT NOT NULL,
-    keterangan TEXT
-  );
-`);
+    CREATE TABLE IF NOT EXISTS attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      nama TEXT NOT NULL,
+      kelas TEXT NOT NULL,
+      status TEXT NOT NULL,
+      keterangan TEXT
+    );
+  `);
+  console.log("Database tables initialized successfully");
+} catch (error) {
+  console.error("Failed to initialize database tables:", error);
+}
 
 // Migration: Add role column to attendance if it doesn't exist
 try {
-  db.prepare("SELECT role FROM attendance LIMIT 1").get();
+  const tableInfo = db.prepare("PRAGMA table_info(attendance)").all() as any[];
+  const hasRole = tableInfo.some(col => col.name === 'role');
+  
+  if (!hasRole) {
+    console.log("Migrating database: Adding role column to attendance table");
+    db.exec("ALTER TABLE attendance ADD COLUMN role TEXT DEFAULT 'siswa'");
+  }
 } catch (e) {
-  console.log("Migrating database: Adding role column to attendance table");
-  db.exec("ALTER TABLE attendance ADD COLUMN role TEXT DEFAULT 'siswa'");
+  console.error("Migration failed:", e);
 }
 
 // Seed initial data if empty
@@ -105,11 +117,16 @@ async function startServer() {
   });
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", time: new Date().toISOString() });
+  });
+
   app.get("/api/students", (req, res) => {
     try {
       const rows = db.prepare("SELECT * FROM students ORDER BY name ASC").all();
       res.json(rows);
     } catch (error) {
+      console.error("Error fetching students:", error);
       res.status(500).json({ error: "Gagal mengambil data siswa" });
     }
   });
@@ -119,6 +136,7 @@ async function startServer() {
       const rows = db.prepare("SELECT * FROM teachers ORDER BY name ASC").all();
       res.json(rows);
     } catch (error) {
+      console.error("Error fetching teachers:", error);
       res.status(500).json({ error: "Gagal mengambil data guru" });
     }
   });
@@ -179,7 +197,8 @@ async function startServer() {
       const rows = db.prepare("SELECT * FROM attendance ORDER BY timestamp DESC").all();
       res.json(rows);
     } catch (error) {
-      res.status(500).json({ error: "Gagal mengambil data" });
+      console.error("Error fetching attendance:", error);
+      res.status(500).json({ error: "Gagal mengambil data riwayat" });
     }
   });
 
