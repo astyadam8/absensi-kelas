@@ -11,15 +11,79 @@ const db = new Database("attendance.db");
 
 // Initialize database
 db.exec(`
+  CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    class TEXT NOT NULL,
+    parent_phone TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    subject TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     nama TEXT NOT NULL,
     kelas TEXT NOT NULL,
     status TEXT NOT NULL,
-    keterangan TEXT
-  )
+    keterangan TEXT,
+    role TEXT DEFAULT 'siswa'
+  );
 `);
+
+// Seed initial data if empty
+const seedData = () => {
+  const studentCount = db.prepare("SELECT COUNT(*) as count FROM students").get() as any;
+  if (studentCount.count === 0) {
+    const students = [
+      { name: "Agresia A. Cika", class: "XII C2", phone: "6281234567890" },
+      { name: "Yohana A. Adam", class: "XII C2", phone: "6281234567891" },
+      { name: "Maria Y.T. Dangur", class: "XII C2", phone: "6281234567892" },
+      { name: "Oswaldus A.Jelahu", class: "XII C2", phone: "6281234567893" },
+      { name: "Agustinus G. Nggeal", class: "XII C2", phone: "6281234567894" },
+      { name: "Yorimus O. Adu", class: "XII C2", phone: "6281234567895" },
+      { name: "Aleksius Hugo", class: "XII C2", phone: "6281234567896" },
+      { name: "Almira P.E. Syamlan", class: "XII C2", phone: "6281234567897" },
+      { name: "Amelia Celsi Anul", class: "XII C2", phone: "6281234567898" },
+      { name: "Maria K.M.Batumali", class: "XII C2", phone: "6281234567899" },
+      { name: "Efrasia F.Latar", class: "XII C2", phone: "6281234567900" },
+      { name: "Gregorius R.Jerni", class: "XII C2", phone: "6281234567901" },
+      { name: "Maria S.Jehambur", class: "XII C2", phone: "6281234567902" },
+      { name: "Marsela V.Indriani", class: "XII C2", phone: "6281234567903" },
+      { name: "Michela M. Lioran", class: "XII C2", phone: "6281234567904" },
+      { name: "Modestus M. Jemadi", class: "XII C2", phone: "6281234567905" },
+      { name: "Monika Y.Stiani", class: "XII C2", phone: "6281234567906" },
+      { name: "Natalia Nabit", class: "XII C2", phone: "6281234567907" },
+      { name: "Oktavianus Kasu", class: "XII C2", phone: "6281234567908" },
+      { name: "Reinaldus Jorsen", class: "XII C2", phone: "6281234567909" },
+      { name: "Sevrianus Areh", class: "XII C2", phone: "6281234567910" },
+      { name: "Simfronianus D. Agol", class: "XII C2", phone: "6281234567911" },
+      { name: "Vinsensius V.Jalar", class: "XII C2", phone: "6281234567912" },
+      { name: "Yoalita A.D. Jeneo", class: "XII C2", phone: "6281234567913" },
+      { name: "Yohanes Florentino", class: "XII C2", phone: "6281234567914" },
+      { name: "Yonesius Balsano", class: "XII C2", phone: "6281234567915" }
+    ];
+    const insert = db.prepare("INSERT INTO students (name, class, parent_phone) VALUES (?, ?, ?)");
+    students.forEach(s => insert.run(s.name, s.class, s.phone));
+  }
+
+  const teacherCount = db.prepare("SELECT COUNT(*) as count FROM teachers").get() as any;
+  if (teacherCount.count === 0) {
+    const teachers = [
+      { name: "Bpk. Yohanes", subject: "Matematika" },
+      { name: "Ibu Maria", subject: "Bahasa Indonesia" },
+      { name: "Bpk. Petrus", subject: "Fisika" }
+    ];
+    const insert = db.prepare("INSERT INTO teachers (name, subject) VALUES (?, ?)");
+    teachers.forEach(t => insert.run(t.name, t.subject));
+  }
+};
+
+seedData();
 
 async function startServer() {
   const app = express();
@@ -28,8 +92,26 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
+  app.get("/api/students", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM students ORDER BY name ASC").all();
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Gagal mengambil data siswa" });
+    }
+  });
+
+  app.get("/api/teachers", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM teachers ORDER BY name ASC").all();
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Gagal mengambil data guru" });
+    }
+  });
+
   app.post("/api/attendance", (req, res) => {
-    const { nama, status, keterangan } = req.body;
+    const { nama, status, keterangan, role } = req.body;
     const kelas = "XII C2";
 
     if (!nama || !status) {
@@ -38,7 +120,6 @@ async function startServer() {
 
     try {
       // Check for duplicate today
-      const today = new Date().toISOString().split('T')[0];
       const existing = db.prepare(
         "SELECT id FROM attendance WHERE nama = ? AND date(timestamp) = date(?)"
       ).get(nama, 'now');
@@ -48,9 +129,9 @@ async function startServer() {
       }
 
       const stmt = db.prepare(
-        "INSERT INTO attendance (nama, kelas, status, keterangan) VALUES (?, ?, ?, ?)"
+        "INSERT INTO attendance (nama, kelas, status, keterangan, role) VALUES (?, ?, ?, ?, ?)"
       );
-      stmt.run(nama, kelas, status, keterangan || "");
+      stmt.run(nama, kelas, status, keterangan || "", role || 'siswa');
       res.json({ message: "Data berhasil disimpan dengan aman!" });
     } catch (error) {
       console.error("Database error:", error);

@@ -36,6 +36,20 @@ interface AttendanceRecord {
   kelas: string;
   status: string;
   keterangan: string;
+  role: string;
+}
+
+interface Student {
+  id: number;
+  name: string;
+  class: string;
+  parent_phone: string;
+}
+
+interface Teacher {
+  id: number;
+  name: string;
+  subject: string;
 }
 
 const SCHOOL_LOGO_URL = "https://ais-dev-wsl27zbocte3skt3eerzqd-322979270979.asia-southeast1.run.app/api/chat/image/90";
@@ -81,6 +95,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'beranda' | 'laporan' | 'peraturan' | 'rekap'>('beranda');
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date(2026, 2, 1)); // Start at March 2026
 
+  const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [nama, setNama] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -90,21 +106,34 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
 
-  const fetchRecords = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch('/api/attendance');
-      if (!response.ok) throw new Error('Gagal mengambil data');
-      const data = await response.json();
-      setRecords(data);
+      const [attRes, stuRes, teaRes] = await Promise.all([
+        fetch('/api/attendance'),
+        fetch('/api/students'),
+        fetch('/api/teachers')
+      ]);
+      
+      if (!attRes.ok || !stuRes.ok || !teaRes.ok) throw new Error('Gagal mengambil data');
+      
+      const [attData, stuData, teaData] = await Promise.all([
+        attRes.json(),
+        stuRes.json(),
+        teaRes.json()
+      ]);
+      
+      setRecords(attData);
+      setStudents(stuData);
+      setTeachers(teaData);
     } catch (error) {
-      console.error('Failed to fetch records:', error);
-      setMessage({ type: 'error', text: 'Gagal memuat riwayat kehadiran.' });
+      console.error('Failed to fetch data:', error);
+      setMessage({ type: 'error', text: 'Gagal memuat data dari server.' });
     }
   };
 
   useEffect(() => {
     if (isLoggedIn) {
-      fetchRecords();
+      fetchData();
     }
   }, [isLoggedIn]);
 
@@ -133,7 +162,7 @@ export default function App() {
       const today = new Date().toISOString().split('T')[0];
       const isDuplicate = records.some(r => {
         const rDate = new Date(r.timestamp).toISOString().split('T')[0];
-        return r.nama === nama && rDate === today;
+        return r.nama === nama && rDate === today && r.role === (loginRole === 'guru' ? 'guru' : 'siswa');
       });
 
       if (isDuplicate) {
@@ -144,7 +173,12 @@ export default function App() {
       const response = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nama, status, keterangan }),
+        body: JSON.stringify({ 
+          nama, 
+          status, 
+          keterangan, 
+          role: loginRole === 'guru' ? 'guru' : 'siswa' 
+        }),
       });
 
       const data = await response.json();
@@ -154,7 +188,7 @@ export default function App() {
         setNama('');
         setKeterangan('');
         setStatus('Hadir');
-        fetchRecords();
+        fetchData();
       } else {
         setMessage({ type: 'error', text: data.error || 'Gagal mengirim presensi.' });
       }
@@ -175,6 +209,8 @@ export default function App() {
       minute: '2-digit'
     }).format(date);
   };
+
+  const currentList = loginRole === 'guru' ? teachers.map(t => ({ name: t.name })) : students.map(s => ({ name: s.name }));
 
   const renderCalendar = () => {
     const year = currentCalendarDate.getFullYear();
@@ -421,10 +457,10 @@ export default function App() {
                                   />
                                 </div>
                                 <div className="max-h-60 overflow-y-auto no-scrollbar" role="listbox">
-                                  {STUDENTS.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                                  {currentList.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
                                     <div className="p-4 text-center text-xs text-cokelat-muda italic">Nama tidak ditemukan</div>
                                   ) : (
-                                    STUDENTS.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map(s => (
+                                    currentList.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map(s => (
                                       <div
                                         key={s.name}
                                         onClick={() => {
@@ -552,7 +588,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={fetchRecords}
+                      onClick={fetchData}
                       disabled={isSubmitting}
                       className="p-1.5 rounded-lg hover:bg-white text-cokelat-muda transition-all disabled:opacity-50"
                       title="Segarkan Data"
@@ -582,17 +618,22 @@ export default function App() {
                         className="bg-white border border-white p-4 rounded-2xl flex items-center gap-4 hover:shadow-xl hover:shadow-cokelat-tua/5 transition-all group shadow-sm"
                       >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                          STATUS_OPTIONS.find(o => o.id === record.status)?.color || 'bg-zinc-200'
+                          record.role === 'guru' ? 'bg-cokelat-tua' : (STATUS_OPTIONS.find(o => o.id === record.status)?.color || 'bg-zinc-200')
                         } text-white shadow-md`}>
-                          {React.createElement(STATUS_OPTIONS.find(o => o.id === record.status)?.icon || UserCheck, { className: 'w-6 h-6' })}
+                          {record.role === 'guru' ? <GraduationCap className="w-6 h-6" /> : React.createElement(STATUS_OPTIONS.find(o => o.id === record.status)?.icon || UserCheck, { className: 'w-6 h-6' })}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
-                            <h3 className="font-bold text-cokelat-tua truncate pr-4">{record.nama}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-cokelat-tua truncate pr-4">{record.nama}</h3>
+                              {record.role === 'guru' && (
+                                <span className="text-[8px] font-black bg-cokelat-tua text-white px-1.5 py-0.5 rounded uppercase tracking-tighter">Guru</span>
+                              )}
+                            </div>
                             <span className="text-[10px] font-bold text-cokelat-muda whitespace-nowrap bg-krem px-2 py-0.5 rounded">{formatDate(record.timestamp)}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-extrabold text-cokelat-muda uppercase tracking-widest opacity-60">{record.kelas}</span>
+                            <span className="text-[10px] font-extrabold text-cokelat-muda uppercase tracking-widest opacity-60">{record.role === 'guru' ? 'Staff Pengajar' : record.kelas}</span>
                             {record.keterangan && (
                               <>
                                 <span className="text-cokelat-muda/20">•</span>
@@ -601,13 +642,13 @@ export default function App() {
                             )}
                           </div>
                         </div>
-                        {loginRole === 'guru' && (
+                        {loginRole === 'guru' && record.role === 'siswa' && (
                           <button
                             onClick={() => {
-                              const student = STUDENTS.find(s => s.name === record.nama);
+                              const student = students.find(s => s.name === record.nama);
                               if (student) {
                                 const message = `Halo Bapak/Ibu, kami dari SMAK SETIA BAKTI RUTENG menginformasikan bahwa ${record.nama} hari ini berstatus: ${record.status}${record.keterangan ? ` (Ket: ${record.keterangan})` : ''}. Terima kasih.`;
-                                window.open(`https://wa.me/${student.parentPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                                window.open(`https://wa.me/${student.parent_phone}?text=${encodeURIComponent(message)}`, '_blank');
                               }
                             }}
                             className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm border border-emerald-100"
@@ -761,18 +802,30 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      const headers = ['Nama', 'Hadir', 'Izin', 'Sakit', 'Total'];
-                      const data = STUDENTS.map(s => {
-                        const sRecords = records.filter(r => r.nama === s.name);
+                      const headers = ['Nama', 'Role', 'Hadir', 'Izin', 'Sakit', 'Total'];
+                      const studentData = students.map(s => {
+                        const sRecords = records.filter(r => r.nama === s.name && r.role === 'siswa');
                         return [
                           s.name,
+                          'Siswa',
                           sRecords.filter(r => r.status === 'Hadir').length,
                           sRecords.filter(r => r.status === 'Izin').length,
                           sRecords.filter(r => r.status === 'Sakit').length,
                           sRecords.length
                         ];
                       });
-                      const csvContent = [headers, ...data].map(e => e.join(",")).join("\n");
+                      const teacherData = teachers.map(t => {
+                        const tRecords = records.filter(r => r.nama === t.name && r.role === 'guru');
+                        return [
+                          t.name,
+                          'Guru',
+                          tRecords.filter(r => r.status === 'Hadir').length,
+                          tRecords.filter(r => r.status === 'Izin').length,
+                          tRecords.filter(r => r.status === 'Sakit').length,
+                          tRecords.length
+                        ];
+                      });
+                      const csvContent = [headers, ...studentData, ...teacherData].map(e => e.join(",")).join("\n");
                       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                       const link = document.createElement("a");
                       const url = URL.createObjectURL(blob);
@@ -796,7 +849,8 @@ export default function App() {
                   <table className="w-full text-left border-collapse" aria-label="Tabel Rekapitulasi Absensi Siswa">
                     <thead>
                       <tr className="bg-zinc-50 border-b border-zinc-100">
-                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Nama Siswa</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em]">Nama</th>
+                        <th scope="col" className="px-6 py-4 text-[10px] font-black text-cokelat-muda uppercase tracking-[0.2em] text-center">Role</th>
                         <th scope="col" className="px-6 py-4 text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] text-center">Hadir</th>
                         <th scope="col" className="px-6 py-4 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] text-center">Izin</th>
                         <th scope="col" className="px-6 py-4 text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] text-center">Sakit</th>
@@ -805,23 +859,28 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-50">
-                      {STUDENTS.map((student) => {
-                        const studentRecords = records.filter(r => r.nama === student.name);
-                        const hadir = studentRecords.filter(r => r.status === 'Hadir').length;
-                        const izin = studentRecords.filter(r => r.status === 'Izin').length;
-                        const sakit = studentRecords.filter(r => r.status === 'Sakit').length;
-                        const total = studentRecords.length;
+                      {[...students.map(s => ({...s, role: 'siswa'})), ...teachers.map(t => ({...t, role: 'guru'}))].map((person) => {
+                        const personRecords = records.filter(r => r.nama === person.name && r.role === person.role);
+                        const hadir = personRecords.filter(r => r.status === 'Hadir').length;
+                        const izin = personRecords.filter(r => r.status === 'Izin').length;
+                        const sakit = personRecords.filter(r => r.status === 'Sakit').length;
+                        const total = personRecords.length;
                         const percentage = total > 0 ? Math.round((hadir / total) * 100) : 0;
 
                         return (
-                          <tr key={student.name} className="hover:bg-zinc-50/50 transition-colors">
+                          <tr key={`${person.role}-${person.name}`} className="hover:bg-zinc-50/50 transition-colors">
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-krem flex items-center justify-center text-cokelat-tua font-bold text-xs">
-                                  {student.name.charAt(0)}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${person.role === 'guru' ? 'bg-cokelat-tua' : 'bg-krem text-cokelat-tua'}`}>
+                                  {person.name.charAt(0)}
                                 </div>
-                                <span className="font-bold text-cokelat-tua text-sm">{student.name}</span>
+                                <span className="font-bold text-cokelat-tua text-sm">{person.name}</span>
                               </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${person.role === 'guru' ? 'bg-cokelat-tua text-white' : 'bg-zinc-100 text-zinc-600'}`}>
+                                {person.role}
+                              </span>
                             </td>
                             <td className="px-6 py-4 text-center font-bold text-emerald-600 text-sm">{hadir}</td>
                             <td className="px-6 py-4 text-center font-bold text-amber-600 text-sm">{izin}</td>
